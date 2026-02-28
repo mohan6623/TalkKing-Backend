@@ -1,7 +1,10 @@
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 from typing import Literal
 
 class Settings(BaseSettings):
+    model_config = ConfigDict(env_file=".env")
+
     ENVIRONMENT: Literal["production", "staging", "development"] = "development"
 
     # Supabase
@@ -34,8 +37,5 @@ class Settings(BaseSettings):
     # Email
     MAILGUN_API_KEY: str = ""
     MAILGUN_DOMAIN: str = "mail.talkking.me"
-
-    class Config:
-        env_file = ".env"
 
 settings = Settings()
