@@ -1,6 +1,7 @@
 """Feedback routes — GET /sessions/{id}/feedback (protected)."""
 from fastapi import APIRouter, Depends, HTTPException
 from app.core.security import get_current_user
+from app.core.supabase_client import get_supabase
 
 router = APIRouter(prefix="/sessions", tags=["feedback"])
 
@@ -10,9 +11,11 @@ async def get_feedback(
     session_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Get the feedback report for a completed session.
+    """Get the feedback report for a completed session from Supabase."""
+    supabase = get_supabase()
+    result = supabase.table("feedback_reports").select("*").eq("session_id", session_id).execute()
 
-    Implementation will query Supabase feedback_reports table in a later task.
-    """
-    # TODO: Implement with Supabase query (Task 10)
-    raise HTTPException(status_code=501, detail="Not yet implemented")
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Feedback not found. Session may still be processing.")
+
+    return result.data[0]
