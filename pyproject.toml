@@ -1,0 +1,9 @@
+[project]
+name = "talkking-backend"
+version = "1.0.0"
+description = "TalkKing AI Communication Coach — Backend API"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

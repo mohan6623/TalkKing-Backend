@@ -1,0 +1,1 @@
+import requests; login = requests.post('http://localhost:8000/api/v1/auth/login', json={'email': 'marveladmin@gmail.com', 'password': 'Password123!'}); token = login.json().get('access_token'); me = requests.get('http://localhost:8000/api/v1/users/me', headers={'Authorization': f'Bearer {token}'}); print('Me:', me.status_code, me.text)
