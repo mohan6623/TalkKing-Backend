@@ -1,0 +1,59 @@
+# Production Docker Compose override
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+version: '3.9'
+
+services:
+
+  api:
+    # Remove hot-reload volume in production
+    volumes: []
+    environment:
+      - ENVIRONMENT=production
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  celery-worker:
+    volumes: []
+    environment:
+      - ENVIRONMENT=production
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  redis:
+    deploy:
+      resources:
+        limits:
+          memory: 600M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Disable Flower in production (use a separate monitoring stack)
+  flower:
+    profiles:
+      - disabled

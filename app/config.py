@@ -3,7 +3,7 @@ from pydantic import ConfigDict
 from typing import Literal
 
 class Settings(BaseSettings):
-    model_config = ConfigDict(env_file=".env")
+    model_config = ConfigDict(env_file=".env", extra="ignore")
 
     ENVIRONMENT: Literal["production", "staging", "development"] = "development"
 
@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     SUPABASE_URL: str = ""
     SUPABASE_SERVICE_KEY: str = ""
     SUPABASE_JWT_SECRET: str = ""
+    SUPABASE_ANON_KEY: str = ""
 
     # AI API Keys
     GROQ_API_KEY: str = ""

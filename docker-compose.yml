@@ -1,0 +1,120 @@
+# TalkKing Backend — Docker Compose
+# Usage:
+#   Development: docker compose up
+#   Production:  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+version: '3.9'
+
+# ── Shared environment ref ────────────────────────────────────
+x-app-env: &app-env
+  env_file: .env
+  environment:
+    - PYTHONUNBUFFERED=1
+    - PYTHONPATH=/app
+    - REDIS_URL=redis://redis:6379/0
+    - CELERY_BROKER_URL=redis://redis:6379/0
+
+# ── Services ─────────────────────────────────────────────────
+services:
+
+  # ── Redis — Celery broker + result backend ──────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: talkking-redis
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - ./infra/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - talkking-net
+
+  # ── FastAPI — main API server ────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: talkking-api
+    restart: unless-stopped
+    <<: *app-env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app:ro          # Hot-reload in dev (remove in prod)
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    networks:
+      - talkking-net
+    labels:
+      - "service=talkking-api"
+
+  # ── Celery Worker — audio analysis tasks ────────────────────
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: talkking-celery-worker
+    restart: unless-stopped
+    <<: *app-env
+    command: >
+      celery --app app.tasks.celery_app.celery_app worker
+             --loglevel=info
+             --concurrency=4
+             --queues=analysis
+             --hostname=worker@%h
+             --max-tasks-per-child=50
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app:ro
+    networks:
+      - talkking-net
+    labels:
+      - "service=talkking-celery-worker"
+
+  # ── Celery Flower — monitoring dashboard (dev/staging only) ──
+  flower:
+    image: mher/flower:2.0
+    container_name: talkking-flower
+    restart: unless-stopped
+    command: >
+      celery flower
+             --broker=redis://redis:6379/0
+             --port=5555
+             --basic_auth=admin:talkking_flower_pass
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - celery-worker
+    networks:
+      - talkking-net
+    profiles:
+      - monitoring     # Only starts when: docker compose --profile monitoring up
+
+# ── Volumes ──────────────────────────────────────────────────
+volumes:
+  redis_data:
+    driver: local
+
+# ── Networks ─────────────────────────────────────────────────
+networks:
+  talkking-net:
+    driver: bridge
