@@ -6,6 +6,7 @@ Best practices applied:
 - Profile creation is atomic with signup
 """
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from app.core.supabase_client import get_supabase
@@ -133,3 +134,30 @@ async def login(body: LoginRequest):
         elif "invalid login" in detail.lower():
             detail = "Invalid email or password. Please try again."
         raise HTTPException(status_code=401, detail=detail)
+
+
+@router.get("/oauth/{provider}")
+async def oauth_login(provider: str, redirect_to: Optional[str] = None):
+    """Initiate OAuth login (e.g. google, github).
+
+    Redirects the user to the Supabase OAuth URL.
+    """
+    try:
+        supabase = get_supabase()
+        options = {}
+        if redirect_to:
+            options["redirect_to"] = redirect_to
+
+        res = supabase.auth.sign_in_with_oauth({
+            "provider": provider,
+            "options": options
+        })
+
+        if not res or not hasattr(res, "url"):
+            raise HTTPException(status_code=400, detail="Failed to initialize OAuth flow")
+
+        return RedirectResponse(url=res.url)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
