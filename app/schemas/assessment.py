@@ -3,9 +3,11 @@ from __future__ import annotations
 
 from typing import Literal
 from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
 
 
 class DemoSkillScores(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
     """Scores returned by the demo assessment (each 1-10)."""
     clarity: int
     vocal: int
@@ -14,6 +16,7 @@ class DemoSkillScores(BaseModel):
 
 
 class DemoTeaserData(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
     """Teaser payload shown to anon users before signup."""
     overall_score: int
     highlights: list[str] = []
@@ -21,6 +24,7 @@ class DemoTeaserData(BaseModel):
 
 
 class DemoSkillSuggestion(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
     """Suggestion for a single dimension."""
     dimension: str
     score: int
@@ -30,7 +34,7 @@ class DemoSkillSuggestion(BaseModel):
 
 class DemoAssessmentResult(BaseModel):
     """Full assessment result revealed after signup/login."""
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     id: str
     duration: int

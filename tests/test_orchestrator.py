@@ -117,7 +117,7 @@ async def test_orchestrator_parallel_execution():
     import asyncio
     call_order = []
 
-    async def mock_transcribe(audio):
+    async def mock_transcribe(audio, duration_seconds=300.0):
         call_order.append("groq_start")
         await asyncio.sleep(0.01)
         call_order.append("groq_end")

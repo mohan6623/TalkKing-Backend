@@ -18,6 +18,7 @@ async def analyze_recording(
     audio_bytes: bytes,
     user_mission: str,
     session_id: str,
+    duration_seconds: float = 300.0,
 ) -> dict:
     """Fan-out to AI providers in parallel, then combine results.
 
@@ -27,13 +28,14 @@ async def analyze_recording(
         audio_bytes: Raw audio recording data
         user_mission: User's mission type for context-aware analysis
         session_id: The recording session ID
+        duration_seconds: Actual recording duration for WPM calculation
 
     Returns:
         Complete feedback report dict
     """
     # Phase 1: Parallel — Groq + Hume both need raw audio
     transcript_result, acoustic_result = await asyncio.gather(
-        transcribe_audio(audio_bytes),
+        transcribe_audio(audio_bytes, duration_seconds=duration_seconds),
         analyze_acoustics(audio_bytes),
     )
 

@@ -1,12 +1,14 @@
 """Progress routes — GET /progress (protected)."""
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException
 from app.core.security import get_current_user
 from app.core.supabase_client import get_supabase
+from app.schemas.progress import ProgressData
 
 router = APIRouter(prefix="/progress", tags=["progress"])
 
 
-@router.get("")
+@router.get("", response_model=list[ProgressData])
 async def get_progress(
     current_user: dict = Depends(get_current_user),
 ):
@@ -15,9 +17,11 @@ async def get_progress(
     supabase = get_supabase()
 
     # Get all feedback reports for this user's sessions, ordered by date
-    result = supabase.table("feedback_reports").select(
-        "session_id, overall_score, clarity, vocal_quality, musicality, boldness, eye_contact, body_language, created_at"
-    ).eq("user_id", user_id).order("created_at").execute()
+    result = await asyncio.to_thread(
+        lambda: supabase.table("feedback_reports").select(
+            "session_id, overall_score, clarity, vocal_quality, musicality, boldness, eye_contact, body_language, created_at"
+        ).eq("user_id", user_id).order("created_at").execute()
+    )
 
     # Transform into ProgressData format
     progress = []

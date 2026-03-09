@@ -1,6 +1,7 @@
 """Hume AI acoustic/emotion analysis service — analyzes vocal quality from audio."""
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 import httpx
 from app.config import settings
@@ -85,31 +86,77 @@ async def analyze_acoustics(audio_bytes: bytes) -> AcousticsResult:
     Returns:
         AcousticsResult with vocal quality scores and feedback
     """
+    if not settings.HUME_API_KEY:
+        return AcousticsResult(score=50, feedback="Hume API key not configured — vocal analysis skipped.")
+
+    try:
+        return await _run_hume_analysis(audio_bytes)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Hume analysis failed: %s", exc)
+        return AcousticsResult(score=50, feedback="Vocal analysis unavailable — using neutral defaults.")
+
+
+async def _run_hume_analysis(audio_bytes: bytes) -> AcousticsResult:
+    """Internal: actual Hume API call, isolated so errors are caught by caller."""
     async with httpx.AsyncClient(timeout=60.0) as client:
+        # Step 1: Create batch job
         response = await client.post(
             "https://api.hume.ai/v0/batch/jobs",
             headers={
                 "X-Hume-Api-Key": settings.HUME_API_KEY,
-                "Content-Type": "application/json",
             },
-            json={
-                "models": {"prosody": {}},
-                "urls": [],  # Will use file upload in production
+            data={
+                "json": '{"models": {"prosody": {}}}'
             },
             files={"file": ("audio.webm", audio_bytes, "audio/webm")},
         )
         response.raise_for_status()
-        data = response.json()
+        job_data = response.json()
+        job_id = job_data.get("job_id")
 
-    # Extract predictions from Hume response structure
+        if not job_id:
+            # Fallback to neutral result if job creation fails
+            return AcousticsResult(score=50, feedback="Vocal analysis unavailable.")
+
+        # Step 2: Poll until job completes (max ~50s)
+        predictions_url = f"https://api.hume.ai/v0/batch/jobs/{job_id}/predictions"
+        status_url = f"https://api.hume.ai/v0/batch/jobs/{job_id}"
+        for _ in range(25):
+            await asyncio.sleep(2)
+            status_resp = await client.get(
+                status_url,
+                headers={"X-Hume-Api-Key": settings.HUME_API_KEY},
+            )
+            status_resp.raise_for_status()
+            state = status_resp.json().get("state", {}).get("status", "")
+            if state == "COMPLETED":
+                break
+            if state == "FAILED":
+                return AcousticsResult(score=50, feedback="Vocal analysis failed.")
+        else:
+            return AcousticsResult(score=50, feedback="Vocal analysis timed out.")
+
+        # Step 3: Fetch predictions
+        pred_resp = await client.get(
+            predictions_url,
+            headers={"X-Hume-Api-Key": settings.HUME_API_KEY},
+        )
+        pred_resp.raise_for_status()
+        data = pred_resp.json()
+
+    # Extract predictions from Hume predictions endpoint
+    # The response is a list of file-level prediction groups
     predictions = []
     try:
-        results = data.get("results", {}).get("predictions", [])
-        for result in results:
-            models = result.get("models", {})
-            prosody = models.get("prosody", {})
-            grouped = prosody.get("grouped_predictions", [])
-            predictions.extend(grouped)
+        entries = data if isinstance(data, list) else [data]
+        for entry in entries:
+            results_list = entry.get("results", {}).get("predictions", [])
+            for result in results_list:
+                models = result.get("models", {})
+                prosody = models.get("prosody", {})
+                grouped = prosody.get("grouped_predictions", [])
+                predictions.extend(grouped)
     except (KeyError, TypeError):
         pass
 

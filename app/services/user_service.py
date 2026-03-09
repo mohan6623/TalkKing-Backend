@@ -1,6 +1,7 @@
 """User service — profile CRUD operations via Supabase."""
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from app.core.supabase_client import get_supabase
 
@@ -15,7 +16,9 @@ async def get_user_profile(user_id: str) -> dict | None:
         Profile dict or None if not found
     """
     supabase = get_supabase()
-    result = supabase.table("profiles").select("*").eq("id", user_id).execute()
+    result = await asyncio.to_thread(
+        lambda: supabase.table("profiles").select("*").eq("id", user_id).execute()
+    )
     if result.data:
         return result.data[0]
     return None
@@ -39,7 +42,9 @@ async def update_user_profile(user_id: str, updates: dict[str, Any]) -> dict | N
         return await get_user_profile(user_id)
 
     supabase = get_supabase()
-    result = supabase.table("profiles").update(safe_updates).eq("id", user_id).execute()
+    result = await asyncio.to_thread(
+        lambda: supabase.table("profiles").update(safe_updates).eq("id", user_id).execute()
+    )
     if result.data:
         return result.data[0]
     return None
@@ -48,7 +53,9 @@ async def update_user_profile(user_id: str, updates: dict[str, Any]) -> dict | N
 async def increment_session_count(user_id: str) -> None:
     """Increment the user's total_sessions counter."""
     supabase = get_supabase()
-    supabase.rpc("increment_sessions", {"user_id_input": user_id}).execute()
+    await asyncio.to_thread(
+        lambda: supabase.rpc("increment_sessions", {"user_id_input": user_id}).execute()
+    )
 
 
 async def update_best_score(user_id: str, score: int) -> None:
@@ -56,6 +63,8 @@ async def update_best_score(user_id: str, score: int) -> None:
     profile = await get_user_profile(user_id)
     if profile and score > profile.get("best_score", 0):
         supabase = get_supabase()
-        supabase.table("profiles").update(
-            {"best_score": score}
-        ).eq("id", user_id).execute()
+        await asyncio.to_thread(
+            lambda: supabase.table("profiles").update(
+                {"best_score": score}
+            ).eq("id", user_id).execute()
+        )

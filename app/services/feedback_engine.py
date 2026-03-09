@@ -179,13 +179,16 @@ def calculate_scores(
     dimension_scores = [clarity["score"], vocal["score"], music["score"], bold["score"]]
     weights = [0.25, 0.25, 0.25, 0.25]
 
-    if eye_contact:
+    if eye_contact and body_language:
         dimension_scores.append(eye_contact["score"])
-        weights = [0.20, 0.20, 0.20, 0.20, 0.10, 0.10]
-    if body_language:
         dimension_scores.append(body_language["score"])
-        if not eye_contact:
-            weights = [0.22, 0.22, 0.22, 0.22, 0.12]
+        weights = [0.20, 0.20, 0.20, 0.20, 0.10, 0.10]
+    elif eye_contact:
+        dimension_scores.append(eye_contact["score"])
+        weights = [0.22, 0.22, 0.22, 0.22, 0.12]
+    elif body_language:
+        dimension_scores.append(body_language["score"])
+        weights = [0.22, 0.22, 0.22, 0.22, 0.12]
 
     overall = int(sum(s * w for s, w in zip(dimension_scores, weights)))
     overall = max(0, min(100, overall))

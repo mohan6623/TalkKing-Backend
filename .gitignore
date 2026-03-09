@@ -1,13 +1,61 @@
+# ── Python bytecode & packaging ──────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
-.env
-.venv/
-venv/
+*.pyd
+.Python
+*.egg
 *.egg-info/
 dist/
 build/
+
+# ── Virtual environments ────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Testing & coverage ──────────────────────────────────────
 .pytest_cache/
 .mypy_cache/
 .coverage
 htmlcov/
+.tox/
+
+# ── Linters & formatters ────────────────────────────────────
+.ruff_cache/
+
+# ── Environment files ───────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+
+# ── IDE / Editor ────────────────────────────────────────────
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+
+# ── OS files ────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Debug & log artifacts ───────────────────────────────────
+*.log
+curl_log.txt
+error.txt
+response.txt
+server_log.txt
+
+# ── Test audio/media files ──────────────────────────────────
+*.wav
+*.mp3
+*.webm
+*.mp4
+
+# ── Git worktrees ───────────────────────────────────────────
+.worktrees/

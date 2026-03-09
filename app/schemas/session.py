@@ -3,11 +3,12 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
 
 
 class RecordingSession(BaseModel):
     """A single recording session."""
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     id: str
     type: Literal["video", "audio"]

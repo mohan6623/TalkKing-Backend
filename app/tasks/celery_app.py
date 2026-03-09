@@ -28,7 +28,7 @@ celery_app.conf.update(
     result_expires=3600,
 
     # Task routing
-    task_default_queue="default",
+    task_default_queue="analysis",
 
     # Memory management
     worker_max_tasks_per_child=100,

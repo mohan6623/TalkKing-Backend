@@ -3,11 +3,12 @@ from __future__ import annotations
 
 from typing import Optional
 from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
 
 
 class ProgressData(BaseModel):
     """A single data point for the progress chart."""
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     date: str
     overall_score: int

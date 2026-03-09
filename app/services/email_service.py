@@ -22,7 +22,7 @@ async def send_feedback_email(
         top_improvement: Area most needing work
     """
     async with httpx.AsyncClient(timeout=10.0) as client:
-        await client.post(
+        response = await client.post(
             f"https://api.mailgun.net/v3/{settings.MAILGUN_DOMAIN}/messages",
             auth=("api", settings.MAILGUN_API_KEY),
             data={
@@ -48,3 +48,4 @@ async def send_feedback_email(
                 """,
             },
         )
+        response.raise_for_status()

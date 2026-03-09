@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
 
 MissionType = Literal[
     "tech-interview",
@@ -36,7 +37,7 @@ class PhraseCount(BaseModel):
 
 class UserProfile(BaseModel):
     """Mirrors the TypeScript UserProfile interface."""
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
     id: str
     name: str
@@ -54,3 +55,13 @@ class UserProfile(BaseModel):
     average_wpm: float = 0.0
     improvement_areas: list[str] = []
     strengths: list[str] = []
+
+
+class UserProfileUpdate(BaseModel):
+    """Allowed fields for PATCH /users/me."""
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    name: Optional[str] = None
+    avatar: Optional[str] = None
+    mission: Optional[MissionType] = None
+    weakness: Optional[WeaknessType] = None

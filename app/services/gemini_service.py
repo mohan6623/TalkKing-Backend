@@ -57,33 +57,39 @@ async def analyze_boldness(transcript: str, mission: str) -> BoldnessResult:
 
     prompt = BOLDNESS_PROMPT.format(transcript=transcript, mission=mission)
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.GEMINI_API_KEY}",
-            json={
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {
-                    "temperature": 0.3,
-                    "maxOutputTokens": 500,
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+                headers={"x-goog-api-key": settings.GEMINI_API_KEY},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "temperature": 0.3,
+                        "maxOutputTokens": 500,
+                    },
                 },
-            },
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        # Extract JSON from Gemini response
+        raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+
+        # Parse — strip any markdown code fences if present
+        clean = raw_text.strip()
+        if clean.startswith("```"):
+            clean = clean.split("\n", 1)[1]  # remove first line
+            clean = clean.rsplit("```", 1)[0]  # remove last fence
+
+        parsed = json.loads(clean)
+
+        return BoldnessResult(
+            score=parsed.get("score", 0),
+            weak_phrases=parsed.get("weak_phrases", []),
+            feedback=parsed.get("feedback", ""),
         )
-        response.raise_for_status()
-        data = response.json()
-
-    # Extract JSON from Gemini response
-    raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
-
-    # Parse — strip any markdown code fences if present
-    clean = raw_text.strip()
-    if clean.startswith("```"):
-        clean = clean.split("\n", 1)[1]  # remove first line
-        clean = clean.rsplit("```", 1)[0]  # remove last fence
-
-    parsed = json.loads(clean)
-
-    return BoldnessResult(
-        score=parsed.get("score", 0),
-        weak_phrases=parsed.get("weak_phrases", []),
-        feedback=parsed.get("feedback", ""),
-    )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("Gemini boldness analysis failed: %s", e)
+        return BoldnessResult(score=0, feedback="Boldness analysis unavailable.")

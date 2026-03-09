@@ -29,6 +29,7 @@ class Settings(BaseSettings):
         "https://talkking.me",
         "https://www.talkking.me",
         "http://localhost:5173",
+        "http://localhost:5174",
     ]
 
     # Monitoring

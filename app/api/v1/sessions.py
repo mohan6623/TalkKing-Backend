@@ -1,5 +1,7 @@
 """Session routes — POST /sessions, POST /sessions/{id}/analyze, GET /sessions/{id}/status (protected)."""
+import asyncio
 import uuid
+import base64
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from typing import Literal
@@ -45,15 +47,17 @@ async def create_session(
     session_id = str(uuid.uuid4())
 
     supabase = get_supabase()
-    supabase.table("sessions").insert({
-        "id": session_id,
-        "user_id": user_id,
-        "type": body.type,
-        "prompt_type": body.prompt_type,
-        "prompt": body.prompt,
-        "duration": body.duration,
-        "status": "created",
-    }).execute()
+    await asyncio.to_thread(
+        lambda: supabase.table("sessions").insert({
+            "id": session_id,
+            "user_id": user_id,
+            "type": body.type,
+            "prompt_type": body.prompt_type,
+            "prompt": body.prompt,
+            "duration": body.duration,
+            "status": "created",
+        }).execute()
+    )
 
     return CreateSessionResponse(session_id=session_id, status="created")
 
@@ -74,20 +78,35 @@ async def analyze_session(
     # Get user profile for mission context and email
     user_id = current_user.get("sub")
     supabase = get_supabase()
-    profile_result = supabase.table("profiles").select("mission, email, name").eq("id", user_id).execute()
+
+    # Verify session ownership
+    session_result = await asyncio.to_thread(
+        lambda: supabase.table("sessions").select("id, duration").eq("id", session_id).eq("user_id", user_id).execute()
+    )
+    if not session_result.data:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session_duration = float(session_result.data[0].get("duration", 300))
+
+    profile_result = await asyncio.to_thread(
+        lambda: supabase.table("profiles").select("mission, email, name").eq("id", user_id).execute()
+    )
     profile = profile_result.data[0] if profile_result.data else {}
 
     # Update session status to processing
-    supabase.table("sessions").update({"status": "processing"}).eq("id", session_id).execute()
+    await asyncio.to_thread(
+        lambda: supabase.table("sessions").update({"status": "processing"}).eq("id", session_id).eq("user_id", user_id).execute()
+    )
 
     # Enqueue Celery task
     from app.tasks.analysis import process_recording
     task = process_recording.delay(
-        audio_data=audio_bytes,
+        audio_b64=base64.b64encode(audio_bytes).decode("ascii"),
         user_mission=profile.get("mission", "tech-interview"),
         session_id=session_id,
+        user_id=user_id,
         user_email=profile.get("email"),
         user_name=profile.get("name"),
+        duration_seconds=session_duration,
     )
 
     return AnalyzeResponse(
@@ -103,8 +122,11 @@ async def get_session_status(
     current_user: dict = Depends(get_current_user),
 ):
     """Check the processing status of a session's AI analysis."""
+    user_id = current_user.get("sub")
     supabase = get_supabase()
-    result = supabase.table("sessions").select("id, status, error").eq("id", session_id).execute()
+    result = await asyncio.to_thread(
+        lambda: supabase.table("sessions").select("id, status, error").eq("id", session_id).eq("user_id", user_id).execute()
+    )
 
     if not result.data:
         raise HTTPException(status_code=404, detail="Session not found")

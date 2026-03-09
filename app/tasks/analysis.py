@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 from app.tasks.celery_app import celery_app
 
@@ -18,11 +19,13 @@ logger = logging.getLogger(__name__)
 )
 def process_recording(
     self,
-    audio_data: bytes,
+    audio_b64: str,
     user_mission: str,
     session_id: str,
+    user_id: str | None = None,
     user_email: str | None = None,
     user_name: str | None = None,
+    duration_seconds: float = 300.0,
 ):
     """Celery task: run full AI analysis pipeline and store results.
 
@@ -33,50 +36,52 @@ def process_recording(
         4. Send email notification via Mailgun (optional)
 
     Args:
-        audio_data: Raw audio bytes
+        audio_b64: Base64-encoded audio bytes (JSON-safe)
         user_mission: User's mission type for context
         session_id: The recording session ID
+        user_id: The authenticated user's ID
         user_email: Optional email for notification
         user_name: Optional name for email personalization
     """
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        async def _run_pipeline():
+            """Async pipeline: AI analysis → store → email."""
+            audio_data = base64.b64decode(audio_b64)
 
-        # Step 1: Run AI analysis
-        from app.services.ai_orchestrator import analyze_recording
-        feedback = loop.run_until_complete(
-            analyze_recording(audio_data, user_mission, session_id)
-        )
+            from app.services.ai_orchestrator import analyze_recording
+            feedback = await analyze_recording(
+                audio_data, user_mission, session_id, duration_seconds=duration_seconds
+            )
 
-        # Step 2: Store in Supabase
-        try:
-            from app.core.supabase_client import get_supabase
-            supabase = get_supabase()
-            supabase.table("feedback_reports").insert(feedback).execute()
-            supabase.table("sessions").update(
-                {"status": "completed"}
-            ).eq("id", session_id).execute()
-        except Exception as db_err:
-            logger.warning(f"Supabase storage failed (non-fatal): {db_err}")
+            if user_id:
+                feedback["user_id"] = user_id
 
-        # Step 3: Send email notification
-        if user_email:
             try:
-                from app.services.email_service import send_feedback_email
-                loop.run_until_complete(
-                    send_feedback_email(
+                from app.core.supabase_client import get_supabase
+                supabase = get_supabase()
+                supabase.table("feedback_reports").insert(feedback).execute()
+                supabase.table("sessions").update(
+                    {"status": "completed"}
+                ).eq("id", session_id).execute()
+            except Exception as db_err:
+                logger.warning(f"Supabase storage failed (non-fatal): {db_err}")
+
+            if user_email:
+                try:
+                    from app.services.email_service import send_feedback_email
+                    await send_feedback_email(
                         to_email=user_email,
                         user_name=user_name or "there",
                         overall_score=feedback["overall_score"],
                         top_strength=feedback["strengths"][0] if feedback["strengths"] else "Keep practicing!",
                         top_improvement=feedback["improvements"][0] if feedback["improvements"] else "You're doing great!",
                     )
-                )
-            except Exception as email_err:
-                logger.warning(f"Email notification failed (non-fatal): {email_err}")
+                except Exception as email_err:
+                    logger.warning(f"Email notification failed (non-fatal): {email_err}")
 
-        loop.close()
+            return feedback
+
+        asyncio.run(_run_pipeline())
         return {"status": "completed", "session_id": session_id}
 
     except Exception as exc:
